@@ -130,6 +130,7 @@ class TimeParser(NumberParser):
             "eighties": 80,
             "nineties": 90,
         }
+        current_century = self.implicit_anchor.year - (self.implicit_anchor.year % 100)
 
         fn_bc_ad = lambda x: -1 if x and x[0] == 'b' else 1
 
@@ -149,14 +150,32 @@ class TimeParser(NumberParser):
             return (year, mult)
         
         decade_tick = self.maybe_keyword('\'')
+        bracket = self.maybe_keyword('(', '[', '{')
         year = self.maybe_match('numeral')
 
-        decade = self.maybe_keyword(*(decade_str.keys()))
+        year_plurals = self.maybe_keyword('\'s', 'es', 's')
 
-        if decade:
-            if (year):
-                year = year * 100 + decade_str[decade]
-            year = decade_str[decade]
+        # eighteen fifties or the nineties
+        decade = self.maybe_keyword(*(decade_str.keys()))
+        if decade and decade_tick is None:
+            
+            if decade:
+                if (year):
+                    year = year * 100 + decade_str[decade]
+                else:
+                    year = current_century + decade_str[decade]
+
+                return (year, 'decade')
+            
+        if bracket:
+            bracket = self.keyword(')', ']', '}')
+
+        if year is None:
+            raise ParseError(self.pos, 'No year found.', self.text[self.pos])
+        
+        if decade_tick:
+            # '80's, '90s, '72
+            year = current_century + year
 
         if (m_bc_ad is None):
             m_bc_ad = self.maybe_keyword(*bc_ad)
@@ -165,20 +184,14 @@ class TimeParser(NumberParser):
             year = year * fn_bc_ad(m_bc_ad)
             return (year, "year")
         
+        # numbers just appearing without any decoration can only be years if they are between 1000 and 9999
+        self.test_range(year, 1000, 9999)
+
+        if year_plurals:
+            return (year, 'decade')
         
-        
-        self.test_range(year, 999, 9999)
-        
-        
-
-
-
-
-
-
-        rv = self.match('year')
-
-        return rv
+        return (year, 'year')
+    
     
     # MONTH = month_str | month_num
     def month(self):
