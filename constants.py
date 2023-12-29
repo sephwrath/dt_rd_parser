@@ -1,7 +1,19 @@
 
 
-
-
+special_days = {
+    'christmas': [24, 12],
+    'christmas': [25, 12],
+    'boxing day': [26, 12],
+    'easter sunday' :[],
+    'easter monday' :[],
+    'good friday' :[],
+    'summer solstace':[],
+    'winter solstace':[],
+    'autumn equinox': [],
+    'valentines day': [],
+    'fathers day': [],
+    'mothers day': [],
+}
 
 dt_months = {
     'jan': 1,
@@ -28,6 +40,21 @@ dt_months = {
     'november': 11,
     'dec': 12,
     'december': 12
+}
+
+dt_month_days = {
+    1: 31,
+    2: 28,
+    3: 31,
+    4: 30,
+    5: 31,
+    6: 30,
+    7: 31,
+    8: 31,
+    9: 30,
+    10: 31,
+    11: 30,
+    12: 31
 }
 
 start_skip = ['before', 'from', 'starting', 'beginning', 'began', 'between']

@@ -155,43 +155,6 @@ date_tests = [
     
 ]
 
-nlp = spacy.load("en_core_web_trf")
-
-class DTToken:
-    def __init__(self, token, type, value):
-        self.type = token.pos_
-        self.processFn = None
-        self.ordinal = None
-        self.period = None
-        self.point = None
-
-class dt_token_types (Enum):
-    NUMBER  = 0 # a whole number or decimal
-    ORDINAL = 1
-    FRACTION = 2 # a fractional number like 1/2
-    PERIOD_IDENTIFIER = 3 # hours, minutes, seconds, days, months, years etc
-    OFFSET_IDENTIFIER = 4 # words that apply an offset or adjustment to time periods
-    DATE = 5
-    TIME = 6
-    LINKING_IDENTIFIER = 7 # words that join two or more time periods ie between, to - 
-
-tokenLookup = {
-    "century": DTToken("century", dt_token_types.PERIOD_IDENTIFIER, None),
-    "centuries": DTToken("centuries", dt_token_types.PERIOD_IDENTIFIER, None),
-    "decade": DTToken("decade", dt_token_types.PERIOD_IDENTIFIER, None),
-    "decades": DTToken("decades", dt_token_types.PERIOD_IDENTIFIER, None),
-    "year": DTToken("year", dt_token_types.PERIOD_IDENTIFIER, None),
-    "years": DTToken("years", dt_token_types.PERIOD_IDENTIFIER, None),
-    "month": DTToken("month", dt_token_types.PERIOD_IDENTIFIER, None),
-    "months": DTToken("months", dt_token_types.PERIOD_IDENTIFIER, None),
-    "week": DTToken("week", dt_token_types.PERIOD_IDENTIFIER, None),
-    "weeks": DTToken("weeks", dt_token_types.PERIOD_IDENTIFIER, None),
-    "day": DTToken("day", dt_token_types.PERIOD_IDENTIFIER, None),
-    "days": DTToken("days", dt_token_types.PERIOD_IDENTIFIER, None),
-    "hour": DTToken("hour", dt_token_types.PERIOD_IDENTIFIER, None),
-    "hours": DTToken("hours", dt_token_types.PERIOD_IDENTIFIER, None),
-    "minute": DTToken("minute", dt_token_types.PERIOD_IDENTIFIER, None)
-}
 
 
 if __name__ == "__main__" :

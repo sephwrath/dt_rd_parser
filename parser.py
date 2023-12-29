@@ -11,12 +11,27 @@ class TimeParser(NumberParser):
     def __init__(self):
         super().__init__()
         self.offset = dt.TimePeriod()
+        # cdt is the current date time variable used to store the current date time when when a time anchor is being parsed
+        self.cdt = None
         self.range = dt.TimeSpan()
         # if parts of a date are missing this is the default date that is used to infer the values - ie "next tuesday" will use this date as the anchor
         self.implicit_anchor = dateTime.datetime.now()
         self.month_day_precidence = True
+        self.northern_hemisphere = True
 
         self.start_expr = self.time_expression
+
+        month_range = {
+            'spring' : (3, 3),
+            'summer' : (6, 3),
+            'autumn' : (9,3),
+            'fall': (9, 3),
+            'winter': (12, 3),
+        }
+
+        if (not self.northern_hemisphere):
+            for key in month_range.keys():
+                month_range[key] = ((month_range[key][0]+ 6) % 12, 3)
 
     def set_start_expr(self, start_expr):
         self.start_expr = start_expr
@@ -55,22 +70,31 @@ class TimeParser(NumberParser):
 
         return rv
     
-    # DATE_EXPRESSION = YEAR | YEAR + MONTH | YEAR + MONTH + DAY | YEAR + DAY | MONTH + DAY | DAY
+    # DATE_EXPRESSION = (YEAR)? + (MONTH)? + (DAY)? + (HOUR)? + (MINUTE)? + (SECOND)? + (MILLISECOND)?
     def date_expression(self):
        
         mostSig = dt.PeriodType.YEAR
+        date_sep = ['/', '-', ',']
+        time_sep = [':']
+
+        self.cdt = dt.DateTimeElements()
+
+        for type  in cdt.getUnsetArray():
+            cdt.set(self.maybe_match('year'), cdt.yr)
+            self.maybe_keyword(*date_sep)
+
+
+
+       
         # try and get as many of these matches as possible in order the highest you start with has to be followed by the next lowest
-        rv = self.match('year', 'month', 'day')
+        # the first missing bit gives the range and the starting point is backfilled with the implicit anchor time
+        # ie Jan will give the range of the month on jan in the implicit anchor time year
+        rv = self.maybe_match('year', 'month', 'day')
 
-
+        # next, last - could these be part of the period offsets - 
 
         return rv
     
-    # TIME_EXPRESSION = HOUR | HOUR + MINUTE | HOUR + MINUTE + SECOND | HOUR + SECOND | MINUTE + SECOND | SECOND
-    def time_expression(self):
-        rv = self.match()
-
-        return rv
     
     # PERIOD_OFFSET_EXPRESSION = IMPLICIT_ANCHOR_OFFSET | (LEAD_MODIFIER)? + PERIOD + (TRAIL_MODIFIER)?
     def period_offset_expression(self):
@@ -80,7 +104,7 @@ class TimeParser(NumberParser):
 
         return rv
     
-    # PERIOD = (NUMERIC_VALUE + KW_PERIOD_IDENTIFIER) *
+    # PERIOD = (NUMERIC_VALUE + KW_PERIOD_IDENTIFIER) * | target_period (monday, june, summer etc)
     def period(self):
         rv = self.match('numeric_period_value')
 
@@ -91,24 +115,6 @@ class TimeParser(NumberParser):
     def numeric_period_value(self):
         rv = self.match('numeral', 'fraction', 'decimal')
 
-   
-
-    
-    def numeral_num(self):
-        chars = []
-        chars.append(self.char('0-9'))
-
-        while True:
-            comma = self.maybe_char(',')
-            char = self.maybe_char('0-9')
-            if char is None:
-                break
-
-            chars.append(char)
-        ordinal = self.maybe_keyword('st', 'nd', 'rd', 'th')
-
-        rv = int(''.join(chars))
-        return (rv, ordinal != None)
     
     # YEAR = yr_prefix + NUMERAL ie year one
     # YEAR = NUMERAL + yr_prefix ie 500 BC
@@ -193,19 +199,32 @@ class TimeParser(NumberParser):
         return (year, 'year')
     
     
-    # MONTH = month_str | month_num
+    # MONTH = month_str | month_num | month_range
     def month(self):
+        # returns a tuple of start month and the number of months in the range
+        rv = None
+        
         months = dtConst.dt_months.keys()
+        strPeriod = self.maybe_keyword(*self.month_range.keys())
+        strSep = self.maybe_char('-', ',')
         strMonth = self.maybe_keyword(*months)
-        intMonth = None
+        if strPeriod is None:
+            strSep = self.maybe_char('-', ',')
+            strPeriod = self.maybe_keyword(*self.month_range.keys())
+
         if strMonth:
-            intMonth = dtConst.dt_months[strMonth]
+            rv = (dtConst.dt_months[strMonth], 1)
+        elif strPeriod:
+            rv = self.month_range[strPeriod]
+        else:
+            intMonth = self.match('numeral')
+            self.test_range(intMonth, 1, 12)
 
+            rv = (intMonth, 1)
 
-    
+        return rv
     
 
-    
 if __name__ == '__main__':
     parser = TimeParser()
 
