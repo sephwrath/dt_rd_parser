@@ -2,13 +2,13 @@ import datetime
 from enum import Enum
 
 class PeriodType (Enum):
-    YEAR = 3
-    MONTH = 5
-    DAY = 7
-    HOUR = 8
-    MINUTE = 9
-    SECOND = 10
-    MILLISECOND = 11
+    YEAR = 0
+    MONTH = 1
+    DAY = 2
+    HOUR = 3
+    MINUTE = 4
+    SECOND = 5
+    MILLISECOND = 6
 
 class PeriodDetail:
     def __init__(self, periodType, base, multiplier, partof, haspart, min, max ):
@@ -124,6 +124,69 @@ class DateTimeElements:
         self.ms = None
 
 class TimeSpan:
-    def __init__(self):
-        self.start = datetime.datetime()
-        self.end = datetime.datetime()
+    def __init__(self, yr=None, mo=None, dy=None, hr=None, mi=None, sd=None, ms=None):
+        self.start = [None, None, None, None, None, None, None]
+        self.start_grain = None
+        self.end =  [None, None, None, None, None, None, None]
+        self.end_grain = None
+        self.set_yrs(yr)
+        self.set_mos(mo)
+        self.set_days(dy)
+        self.set_hours(hr)
+        self.set_mins(mi)
+        self.set_secs(sd)
+
+    def infer(self, date : datetime.datetime):
+        """
+        Fill in any missing date information that is missing with a date time reference
+        only populate upto the first defined time period type
+
+        Parameters:
+            date (datetime.datetime): The date to infer the period values from.
+
+        Returns:
+            None
+        """
+        for (idx, per) in enumerate(self.start):
+            if per is not None:
+                break
+            else:
+                if idx == PeriodType.YEAR:
+                    self.set_yrs(date.year)
+                elif idx == PeriodType.MONTH:
+                    self.set_mos(date.month)
+                elif idx == PeriodType.DAY:
+                    self.set_days(date.day)
+                elif idx == PeriodType.HOUR:
+                    self.set_hours(date.hour)
+                elif idx == PeriodType.MINUTE:
+                    self.set_mins(date.minute)
+        
+
+    def set_period(self, period, start, end):
+        if start == None:
+            return
+        self.start_grain = period
+        self.start[period] = start
+        if end is not None:
+            self.end[period] = end
+        else:
+            self.end[period] = self.start[period]
+
+    def set_yrs(self, yrS, yrE = None):
+       self.set_period(PeriodType.YEARS, yrS, yrE)
+
+    def set_mos(self, moS, moE = None):
+        self.set_period(PeriodType.MONTH, moS, moE)
+
+    def set_days(self, dayS, dayE = None):
+        self.set_period(PeriodType.DAY, dayS, dayE)
+
+    def set_hours(self, hrS, hrE = None):
+        self.set_period(PeriodType.HOUR, hrS, hrE)
+
+    def set_mins(self, minS, minE = None):
+        self.set_period(PeriodType.MINUTE, minS, minE)
+
+    def set_secs(self, secS, secE = None):
+        self.set_period(PeriodType.SECOND, secS, secE)

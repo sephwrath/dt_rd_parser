@@ -1,18 +1,11 @@
 
 
 special_days = {
-    'christmas': [24, 12],
-    'christmas': [25, 12],
-    'boxing day': [26, 12],
-    'easter sunday' :[],
-    'easter monday' :[],
-    'good friday' :[],
-    'summer solstace':[],
-    'winter solstace':[],
-    'autumn equinox': [],
-    'valentines day': [],
-    'fathers day': [],
-    'mothers day': [],
+    'christmas': (24, 12),
+    'christmas': (25, 12),
+    'boxing day': (26, 12),
+    'summer solstace': (21, 6),
+    'winter solstace': (22, 12)
 }
 
 dt_months = {
@@ -42,6 +35,23 @@ dt_months = {
     'december': 12
 }
 
+dt_week_days = {
+    'mon': 0,
+    'monday': 0,
+    'tue': 1,
+    'tuesday': 1,
+    'wed': 2,
+    'wednesday': 2,
+    'thu': 3,
+    'thursday': 3,
+    'fri': 4,
+    'friday': 4,
+    'sat': 5,
+    'saturday': 5,
+    'sun': 6,
+    'sunday': 6
+}
+
 dt_month_days = {
     1: 31,
     2: 28,
@@ -55,6 +65,20 @@ dt_month_days = {
     10: 31,
     11: 30,
     12: 31
+}
+
+
+times_of_day = {
+    'morning': (0, 0, 12, 0),
+    'afternoon': (12 ,0, 18, 0),
+    'evening': (18,0, 0, 0),
+    'night': (19, 0, 6, 0),
+    'dawn': (6, 0, 8, 0),
+    'dusk': (17, 0, 19, 0),
+    'midday': (11, 30, 12, 30),
+    'midnight': (23, 30, 0, 30),
+    'day': (6, 0, 18, 0),
+    'noon': (12, 0, 12, 0)
 }
 
 start_skip = ['before', 'from', 'starting', 'beginning', 'began', 'between']

@@ -55,13 +55,13 @@ class TimeParser(NumberParser):
     
     # EXPLICIT_RANGE = range_start + IMPLICIT_RANGE + range_separator  + IMPLICIT_RANGE
     def explicit_range(self):
-        range_start = ['from', 'between', 'beginning', 'starting', 'begin', 'start', 'started', 'commencing', 'initialted']
+        range_start = ['the', 'around', 'from', 'between', 'beginning', 'starting', 'begin', 'start', 'started', 'commencing', 'initialted']
         range_separator = ['and', 'to', 'through', 'thru', '-', 'ending', 'ended', 'end', ':', 'until']
 
         rv = self.match('implicit_range')
 
     def period_part(self):
-        prefix = ['first part of', 'last part of', 'middle of']
+        prefix = ['first part of', 'last part of', 'middle of', 'start of']
 
     
     # TIME_ANCHOR_PT = DATE_EXPRESSION | STD_DATE | STD_TIME
@@ -79,8 +79,8 @@ class TimeParser(NumberParser):
 
         self.cdt = dt.DateTimeElements()
 
-        for type  in cdt.getUnsetArray():
-            cdt.set(self.maybe_match('year'), cdt.yr)
+        for type  in self.cdt.getUnsetArray():
+            self.cdt.set(self.maybe_match('year'), self.cdt.yr)
             self.maybe_keyword(*date_sep)
 
 
@@ -223,6 +223,63 @@ class TimeParser(NumberParser):
             rv = (intMonth, 1)
 
         return rv
+    
+    def day(self):
+        day_names = dtConst.dt_week_days.keys()
+        dayName = self.maybe_keyword(*day_names)
+
+        dayNum = self.match('ordianl', 'numeral')
+        self.test_range(dayNum, 1, 31)
+
+    def time(self):
+        ret_time = dt.TimeSpan()
+        time_am_pm = ['am', 'pm', 'a.m.', 'p.m.', 'a.m', 'p.m']
+
+        time_words = self.maybe_keyword(*dtConst.times_of_day.keys())
+        
+        time_sep = [':', '.']
+        hour = self.maybe_match('numeral')
+        if (hour):
+            self.keyword(*time_sep)
+        
+        minute = self.maybe_match('numeral')
+        if (minute):
+            self.test_range(minute, 0, 59)
+            self.keyword(*time_sep)
+            ret_time.set_mins(minute)
+
+        second = self.maybe_match('numeral')
+        if (second):
+            self.test_range(second, 1, 59)
+            self.keyword(*time_sep)
+            ret_time.set_mins(second)
+
+        am_pm = self.maybe_keyword(*time_am_pm)
+
+        if (time_words is None):
+            eat_sep = ['in the', 'at']
+            self.maybe_keyword(*eat_sep)
+            time_words = self.maybe_keyword(*dtConst.times_of_day.keys())
+
+
+        if (hour):
+            if (am_pm):
+                self.test_range(hour, 1, 12)
+                if (am_pm.startswith('p')):
+                    hour = hour + 12
+            else:
+                self.test_range(hour, 0, 23)
+
+            ret_time.set_mins(hour)
+
+        elif (time_words):
+            tod = dtConst.times_of_day[time_words]
+            ret_time.set_hours(tod[0], tod[2])
+            ret_time.set_mins(tod[1], tod[3])
+            
+
+
+
     
 
 if __name__ == '__main__':

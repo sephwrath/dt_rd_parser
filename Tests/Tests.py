@@ -1,19 +1,13 @@
-import spacy, re
-from spacy.matcher import Matcher
-from spacy.tokenizer import Tokenizer
-from spacy.tokens import Doc, Token, Span
 
-import requests
-from enum import Enum
+from ..timeClasses import TimeSpan
+import datetime
 
-from spacy import displacy
-#from dateparser import parse
-#from timexy import Timexy
-import en_core_web_trf
+now = datetime.datetime.now()
 
-date_tests = [
+
+date_tests = {
     # date time formats
-    "January 5",
+    "January 5" : TimeSpan(None, 1, 5).infer(now),
     "dec 25",
     "may 27th",
     "October 2006",
