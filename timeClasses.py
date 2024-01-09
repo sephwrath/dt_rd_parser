@@ -1,5 +1,7 @@
 import datetime
+import calendar
 from enum import Enum
+import constants as dtc
 
 class PeriodType (Enum):
     YEAR = 0
@@ -98,19 +100,19 @@ class TimePeriod:
         self.milliseconds = dt.microsecond
     
     def add(self, number, period: PeriodType):
-        if period == PeriodType.DAYS :
+        if period == PeriodType.DAY :
             self.days += number
-        elif period == PeriodType.MONTHS :
+        elif period == PeriodType.MONTH :
             self.months += number
-        elif period == PeriodType.YEARS :
+        elif period == PeriodType.YEAR :
             self.years += number
-        elif period == PeriodType.HOURS :
+        elif period == PeriodType.HOUR :
             self.hours += number
-        elif period == PeriodType.MINUTES :
+        elif period == PeriodType.MINUTE :
             self.minutes += number
-        elif period == PeriodType.SECONDS :
+        elif period == PeriodType.SECOND :
             self.seconds += number
-        elif period == PeriodType.MILLISECONDS :
+        elif period == PeriodType.MILLISECOND :
             self.milliseconds += number
         
 class DateTimeElements:
@@ -126,7 +128,7 @@ class DateTimeElements:
 class TimeSpan:
     def __init__(self, yr=None, mo=None, dy=None, hr=None, mi=None, sd=None, ms=None):
         self.start = [None, None, None, None, None, None, None]
-        self.start_grain = None
+        self.grain = None
         self.end =  [None, None, None, None, None, None, None]
         self.end_grain = None
         self.set_yrs(yr)
@@ -136,7 +138,7 @@ class TimeSpan:
         self.set_mins(mi)
         self.set_secs(sd)
 
-    def infer(self, date : datetime.datetime):
+    def infer(self, date : datetime.datetime, grain=None):
         """
         Fill in any missing date information that is missing with a date time reference
         only populate upto the first defined time period type
@@ -148,7 +150,8 @@ class TimeSpan:
             None
         """
         for (idx, per) in enumerate(self.start):
-            if per is not None:
+            if per is not None or (grain is not None and idx > grain) :
+                # bread when we have an existing date value or when we are going above the grain parameter
                 break
             else:
                 if idx == PeriodType.YEAR:
@@ -161,20 +164,115 @@ class TimeSpan:
                     self.set_hours(date.hour)
                 elif idx == PeriodType.MINUTE:
                     self.set_mins(date.minute)
+                # no point inferning seconds or we have inferred the whole date
+        return self
+    
+    def set_end(self, yr, mo, dy, hr, mi, sd):
+        return self.set_edge('end', self.grain, yr, mo, dy, hr, mi, sd)
+
+    def set_edge(self, edge='start', grain=PeriodType.SECOND, *args):
+        dt_edge = self.start if edge == 'start' else self.end
+        for (idx, per_val) in enumerate(args):
+            if (grain <= idx):
+                break
+            dt_edge[idx] = per_val if per_val is not None else None
+
+        return self
+
+    def to_datetime(self, edge='start'):
+        dt = datetime.datetime()
+        dt_edge = self.start if edge == 'start' else self.end
+
+        dt.year = (dt_edge[0] if dt_edge[0] is not None else 0)
+        dt.month = (dt_edge[1] if dt_edge[1] is not None else 0)
+        dt.day = (dt_edge[2] if dt_edge[2] is not None else 0)
+        dt.hour = (dt_edge[3] if dt_edge[3] is not None else 0)
+        dt.minute = (dt_edge[4] if dt_edge[4] is not None else 0)
+        dt.second = (dt_edge[5] if dt_edge[5] is not None else 0)
+        return dt
+    
+    def from_datetime(self, dt, grain=PeriodType.DAY):
+        self.set_yrs(dt.year if grain >= PeriodType.YEAR else None)
+        self.set_mos(dt.month if grain >= PeriodType.MONTH else None)
+        self.set_days(dt.day if grain >= PeriodType.DAY else None)
+        self.set_hours(dt.hour if grain >= PeriodType.HOUR else None)
+        self.set_mins(dt.minute if grain >= PeriodType.MINUTE else None)
+        self.set_secs(dt.second if grain >= PeriodType.SECOND else None)
+
+    def offset_month(self, update_var, months):
+        update_var[1] = update_var[1] - 1 + months
+        update_var[0] = update_var[0] + update_var[1] // 12
+        update_var[1] = update_var[1] % 12 + 1
+        update_var[2] = min(update_var[2], calendar.monthrange(update_var[0],update_var[1])[1])
+
+    def offset_period(self, period, offset, edge='both'):
+        delta = None
+        self.grain = period
+        if (period == PeriodType.YEAR):
+            if edge != 'start':
+                self.end[0] += offset
+            if edge != 'end':
+                self.start[0] += offset
+        elif (period == PeriodType.MONTH):
+            if edge != 'start':
+                self.offset_month(self.end, offset)
+            if edge != 'end':
+                self.offset_month(self.start, offset)
+        if (period == PeriodType.DAY):
+            delta = datetime.timedelta(days= offset)
+        elif (period == PeriodType.HOUR):
+            delta = datetime.timedelta(hours= offset)
+        elif (period == PeriodType.MINUTE):
+            delta = datetime.timedelta(minutes= offset)
+        elif (period == PeriodType.SECOND):
+            delta = datetime.timedelta(seconds= offset)
+        if delta is not None:
+            if edge != 'start':
+                dt = self.to_datetime('end')
+                dt.date += delta
+                self.set_edge('end', self.grain, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+            if edge != 'end':
+                dt = self.to_datetime('start')
+                dt.date += delta
+                self.set_edge('start', self.grain, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+        return self
+
+    def next_wd(self, wd_str):
+        if (wd_str in dtc.dt_week_days):
+            curr_day = dtc.dt_week_days[wd_str]
+            if (self.start[0] is not None and self.start[1] is not None and self.start[3] is not None):
+                dt = self.to_datetime()
+                next_day = dt.weekday()
+                if (next_day <= curr_day):
+                    next_day += (7 - curr_day)
+                day_off = next_day - curr_day
+                self.offset_period(PeriodType.DAY, day_off)
+        return self
         
 
     def set_period(self, period, start, end):
         if start == None:
             return
-        self.start_grain = period
+        if self.grain < period:
+            self.grain = period
         self.start[period] = start
         if end is not None:
             self.end[period] = end
         else:
             self.end[period] = self.start[period]
+            self.offset_period(period, 1, 'end')
+        self.__zero_from_grain()
+
+    def __zero_from_grain(self):
+        for idx in range(self.grain+1, 6):
+            self.start[idx] = 0
+            self.end[idx] = 0
+
 
     def set_yrs(self, yrS, yrE = None):
-       self.set_period(PeriodType.YEARS, yrS, yrE)
+       self.set_period(PeriodType.YEAR, yrS, yrE)
 
     def set_mos(self, moS, moE = None):
         self.set_period(PeriodType.MONTH, moS, moE)
