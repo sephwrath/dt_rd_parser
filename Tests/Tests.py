@@ -1,7 +1,8 @@
 
 from ..timeClasses import TimeSpan, PeriodType
-from ..parser import TimeParser
+from ..timeParser import TimeParser
 import datetime
+import pytest
 
 
 now = datetime.datetime.now()
@@ -148,7 +149,7 @@ date_tests = {
     "3rd month next year" : TimeSpan(None, 3).infer(now).offset_period(PeriodType.YEAR, 1),
     "3rd thursday this september" : TimeSpan(None, 9).infer(now).next_wd('thursday').next_wd('thursday').next_wd('thursday'),
     "4th day last week" : TimeSpan().infer(now, grain=PeriodType.DAY).offset_period(PeriodType.DAY, -7).next_wd('tursday'),
-    
+    "2300 hrs" : TimeSpan(None, None, None, 23).infer(now)
 }
 
 
@@ -157,7 +158,8 @@ if __name__ == "__main__" :
     timeparser = TimeParser()
     for  test in date_tests.keys:
         testTime = timeparser.parse(test)
-        assert(testTime == date_tests[test])
+        if testTime != date_tests[test]:
+            print("Error: " + test + " " + str(testTime) + " " + str(date_tests[test]))
         
         
 

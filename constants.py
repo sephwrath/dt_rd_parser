@@ -1,5 +1,3 @@
-
-
 special_days = {
     'christmas': (24, 12),
     'christmas': (25, 12),

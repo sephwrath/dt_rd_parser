@@ -13,7 +13,7 @@ class PeriodType (Enum):
     MILLISECOND = 6
 
 class PeriodDetail:
-    def __init__(self, periodType, base, multiplier, partof, haspart, min, max ):
+    def __init__(self, periodType, base, multiplier, partof, min, max ):
         self.periodType = periodType
         self.base = base
         self.multiplier = multiplier
@@ -38,43 +38,7 @@ periodDetails = {
     "second": PeriodDetail("second", PeriodType.SECOND, 1, "millisecond", 1, 1000)
 }
 
-#nlp = spacy.load("en_core_web_trf")
 
-class DTToken:
-    def __init__(self, token, type, value):
-        self.type = token.pos_
-        self.processFn = None
-        self.ordinal = None
-        self.period = None
-        self.point = None
-
-class dt_token_types (Enum):
-    NUMBER  = 0 # a whole number or decimal
-    ORDINAL = 1
-    FRACTION = 2 # a fractional number like 1/2
-    PERIOD_IDENTIFIER = 3 # hours, minutes, seconds, days, months, years etc
-    OFFSET_IDENTIFIER = 4 # words that apply an offset or adjustment to time periods
-    DATE = 5
-    TIME = 6
-    LINKING_IDENTIFIER = 7 # words that join two or more time periods ie between, to - 
-
-tokenLookup = {
-    "century": DTToken("century", dt_token_types.PERIOD_IDENTIFIER, None),
-    "centuries": DTToken("centuries", dt_token_types.PERIOD_IDENTIFIER, None),
-    "decade": DTToken("decade", dt_token_types.PERIOD_IDENTIFIER, None),
-    "decades": DTToken("decades", dt_token_types.PERIOD_IDENTIFIER, None),
-    "year": DTToken("year", dt_token_types.PERIOD_IDENTIFIER, None),
-    "years": DTToken("years", dt_token_types.PERIOD_IDENTIFIER, None),
-    "month": DTToken("month", dt_token_types.PERIOD_IDENTIFIER, None),
-    "months": DTToken("months", dt_token_types.PERIOD_IDENTIFIER, None),
-    "week": DTToken("week", dt_token_types.PERIOD_IDENTIFIER, None),
-    "weeks": DTToken("weeks", dt_token_types.PERIOD_IDENTIFIER, None),
-    "day": DTToken("day", dt_token_types.PERIOD_IDENTIFIER, None),
-    "days": DTToken("days", dt_token_types.PERIOD_IDENTIFIER, None),
-    "hour": DTToken("hour", dt_token_types.PERIOD_IDENTIFIER, None),
-    "hours": DTToken("hours", dt_token_types.PERIOD_IDENTIFIER, None),
-    "minute": DTToken("minute", dt_token_types.PERIOD_IDENTIFIER, None)
-}
 
 
 
@@ -115,22 +79,13 @@ class TimePeriod:
         elif period == PeriodType.MILLISECOND :
             self.milliseconds += number
         
-class DateTimeElements:
-    def __init__(self):
-        self.yr = None
-        self.mo = None
-        self.dy = None
-        self.hr = None
-        self.mi = None
-        self.sd = None
-        self.ms = None
 
 class TimeSpan:
     def __init__(self, yr=None, mo=None, dy=None, hr=None, mi=None, sd=None, ms=None):
         self.start = [None, None, None, None, None, None, None]
-        self.grain = None
+        self.grain = PeriodType.YEAR
         self.end =  [None, None, None, None, None, None, None]
-        self.end_grain = None
+        self.end_grain = PeriodType.YEAR
         self.set_yrs(yr)
         self.set_mos(mo)
         self.set_days(dy)
@@ -167,28 +122,90 @@ class TimeSpan:
                 # no point inferning seconds or we have inferred the whole date
         return self
     
+    def merge(self, other):
+        for (idx, per) in enumerate(other.start):
+            if per is not None:
+                self.start[idx] = per
+        for (idx, per) in enumerate(other.end):
+            if per is not None:
+                self.end[idx] = per
+        return self
+    
+    def has_gaps(self):
+        last_null = True
+        change_count = 0
+        for  per in self.start:
+            if not((per is None) == last_null):
+                change_count += 1
+                last_null = not last_null
+            if change_count > 2:
+                return True
+        last_null = True
+        change_count = 0
+        for per in self.end:
+            if not((per is None) == last_null):
+                change_count += 1
+                last_null = not last_null
+            if change_count > 2:
+                return True
+        return False
+    
+    def is_none(self):
+        for per in self.start:
+            if per is not None:
+                return False
+        for per in self.end:
+            if per is not None:
+                return False
+        return True
+    
+    def __str__(self):
+        return self.__print_date('start') + " - " + self.__print_date('end')
+    
+    def __print_date(self, arr='start'):
+        dateStr = ""
+        dt_obj = self.to_datetime(arr)
+        return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+    
+    def __eq__(self, __value: object) -> bool:
+        if self.grain != __value.grain:
+            return False
+        for (idx, per) in enumerate(self.start):
+            if per != __value.start[idx]:
+                return False
+        for (idx, per) in enumerate(self.end):
+            if per != __value.end[idx]:
+                return False
+        return True
+
+    def __ne__(self, __value: object) -> bool:
+        return not self.__eq__(__value)
+    
     def set_end(self, yr, mo, dy, hr, mi, sd):
         return self.set_edge('end', self.grain, yr, mo, dy, hr, mi, sd)
 
     def set_edge(self, edge='start', grain=PeriodType.SECOND, *args):
         dt_edge = self.start if edge == 'start' else self.end
         for (idx, per_val) in enumerate(args):
-            if (grain <= idx):
+            if (grain.value <= idx):
                 break
             dt_edge[idx] = per_val if per_val is not None else None
 
         return self
 
     def to_datetime(self, edge='start'):
-        dt = datetime.datetime()
+        
         dt_edge = self.start if edge == 'start' else self.end
 
-        dt.year = (dt_edge[0] if dt_edge[0] is not None else 0)
-        dt.month = (dt_edge[1] if dt_edge[1] is not None else 0)
-        dt.day = (dt_edge[2] if dt_edge[2] is not None else 0)
-        dt.hour = (dt_edge[3] if dt_edge[3] is not None else 0)
-        dt.minute = (dt_edge[4] if dt_edge[4] is not None else 0)
-        dt.second = (dt_edge[5] if dt_edge[5] is not None else 0)
+        def raise_(ex):
+            raise ex
+        
+        dt = datetime.datetime((dt_edge[0] if dt_edge[0] is not None else raise_(ValueError("Year cannot be None"))),
+                               (dt_edge[1] if dt_edge[1] is not None else 1),
+                               (dt_edge[2] if dt_edge[2] is not None else 1),
+                               (dt_edge[3] if dt_edge[3] is not None else 0),
+                               (dt_edge[4] if dt_edge[4] is not None else 0),
+                               (dt_edge[5] if dt_edge[5] is not None else 0))
         return dt
     
     def from_datetime(self, dt, grain=PeriodType.DAY):
@@ -205,7 +222,7 @@ class TimeSpan:
         update_var[1] = update_var[1] % 12 + 1
         update_var[2] = min(update_var[2], calendar.monthrange(update_var[0],update_var[1])[1])
 
-    def offset_period(self, period, offset, edge='both'):
+    def offset_period(self, period, offset, edge='both', lim_include=True):
         delta = None
         self.grain = period
         if (period == PeriodType.YEAR):
@@ -226,6 +243,10 @@ class TimeSpan:
             delta = datetime.timedelta(minutes= offset)
         elif (period == PeriodType.SECOND):
             delta = datetime.timedelta(seconds= offset)
+    
+        # exclue the last second
+        if lim_include:
+            delta = delta - datetime.timedelta(seconds=1)
         if delta is not None:
             if edge != 'start':
                 dt = self.to_datetime('end')
@@ -251,25 +272,24 @@ class TimeSpan:
                 self.offset_period(PeriodType.DAY, day_off)
         return self
         
-
     def set_period(self, period, start, end):
         if start == None:
             return
-        if self.grain < period:
+        if self.grain.value < period.value:
             self.grain = period
-        self.start[period] = start
+        self.start[period.value] = start
         if end is not None:
-            self.end[period] = end
+            self.end[period.value] = end
         else:
-            self.end[period] = self.start[period]
-            self.offset_period(period, 1, 'end')
+            self.end[period.value] = self.start[period.value]
+            self.offset_period(period, 1, 'end', False)
         self.__zero_from_grain()
 
     def __zero_from_grain(self):
-        for idx in range(self.grain+1, 6):
-            self.start[idx] = 0
-            self.end[idx] = 0
-
+        for idx in range(self.grain.value+1, 6):
+            minVal = 1 if idx <= 2 else 0
+            self.start[idx] = minVal
+            self.end[idx] = minVal
 
     def set_yrs(self, yrS, yrE = None):
        self.set_period(PeriodType.YEAR, yrS, yrE)
