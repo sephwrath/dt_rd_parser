@@ -84,10 +84,11 @@ class TimeParser(NumberParser):
                 if date_val == None:
                     break
                 elif date_val[0] == 'year':
-                    self.range.set_yrs(date_val[1])
+                    # set the start and end dates to be the same then mod end date with the offset period
+                    self.range.set_yrs(date_val[1], date_val[1])
                     pd = getPd(date_val[2])
                     if pd is not None:
-                        self.range.offset_period(pd)
+                        self.range.offset_period(pd.base, pd.multiplier, 'end')
                 elif date_val[0] == 'month':
                     self.range.set_mos(date_val[1])
                 elif date_val[0] == 'day':

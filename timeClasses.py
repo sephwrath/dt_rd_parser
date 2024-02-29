@@ -13,11 +13,12 @@ class PeriodType (Enum):
     MILLISECOND = 6
 
 class PeriodDetail:
-    def __init__(self, periodType, base, multiplier, partof, min, max ):
+    def __init__(self, periodType, base, multiplier, hasPart, min, max ):
         self.periodType = periodType
         self.base = base
         self.multiplier = multiplier
         self.next = next
+        self.hasPart = hasPart
         self.min = min
         self.max = max
 
@@ -86,6 +87,11 @@ class TimeSpan:
         self.grain = PeriodType.YEAR
         self.end =  [None, None, None, None, None, None, None]
         self.end_grain = PeriodType.YEAR
+
+        # defines wether to exclude the last second or millisecond from the end limit when returning the end of a time span
+        # so will return 2009/12/31 23:59:59.999999 instead of 2010/1/1 0:0:0.0
+        # Todo add getters to access start and end to enforce this
+        self.exclude_end_limit = True
         self.set_yrs(yr)
         self.set_mos(mo)
         self.set_days(dy)
@@ -106,7 +112,7 @@ class TimeSpan:
         """
         for (idx, per) in enumerate(self.start):
             if per is not None or (grain is not None and idx > grain) :
-                # bread when we have an existing date value or when we are going above the grain parameter
+                # break when we have an existing date value or when we are going above the grain parameter
                 break
             else:
                 if idx == PeriodType.YEAR:
@@ -187,7 +193,7 @@ class TimeSpan:
     def set_edge(self, edge='start', grain=PeriodType.SECOND, *args):
         dt_edge = self.start if edge == 'start' else self.end
         for (idx, per_val) in enumerate(args):
-            if (grain.value <= idx):
+            if (grain.value < idx):
                 break
             dt_edge[idx] = per_val if per_val is not None else None
 
@@ -222,7 +228,18 @@ class TimeSpan:
         update_var[1] = update_var[1] % 12 + 1
         update_var[2] = min(update_var[2], calendar.monthrange(update_var[0],update_var[1])[1])
 
-    def offset_period(self, period, offset, edge='both', lim_include=True):
+    def apply_timedelta(self,edge, delta, grain):
+        dt = self.to_datetime(edge)
+        dt += delta
+        self.set_edge(edge, grain, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+    def exclude_end_limit(self):
+        dt = self.to_datetime('end')
+        dt -=  datetime.timedelta(seconds=1)
+        self.set_edge('end', PeriodType.SECOND, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+
+    def offset_period(self, period, offset, edge='both'):
         delta = None
         self.grain = period
         if (period == PeriodType.YEAR):
@@ -243,20 +260,12 @@ class TimeSpan:
             delta = datetime.timedelta(minutes= offset)
         elif (period == PeriodType.SECOND):
             delta = datetime.timedelta(seconds= offset)
-    
-        # exclue the last second
-        if lim_include:
-            delta = delta - datetime.timedelta(seconds=1)
+        
         if delta is not None:
             if edge != 'start':
-                dt = self.to_datetime('end')
-                dt.date += delta
-                self.set_edge('end', self.grain, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
-
+                self.apply_timedelta('end', delta, self.grain)
             if edge != 'end':
-                dt = self.to_datetime('start')
-                dt.date += delta
-                self.set_edge('start', self.grain, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+                self.apply_timedelta('start', delta, self.grain)
 
         return self
 
