@@ -106,7 +106,14 @@ class NumberParser(ParserBase):
                     )
 
     # NUMERAL = (NUMERAL_TXT | NUMERAL_NUM | BIG_PREFIX_TEXT) + ((NUMBER_KEYS)* + (NUMERAL_TXT | NUMERAL_NUM | BIG_PREFIX_TEXT))*
-    def numeral(self):
+    def __numeral(self, no_decoration=False):
+        if no_decoration:
+            numeral_num = "numeral_num_nd"
+            numeral_text = "numeral_text_nd"
+        else:
+            numeral_num = "numeral_num"
+            numeral_text = "numeral_text"
+
         
         total = 0
         start_a = self.maybe_keyword('a')
@@ -115,20 +122,20 @@ class NumberParser(ParserBase):
             if (prefix):
                 total += prefix
         else :
-            total = self.match('numeral_text', 'numeral_num')
+            total = self.match(numeral_text, numeral_num)
             prefix = self.maybe_match('big_prefix_text')
             if (prefix):
                 total = prefix * total
 
         while(True):
-            kw = self.maybe_keyword('and', ',')
+            kw = self.maybe_keyword('and')
             
             subsequent_tot = 0
             prefix = self.maybe_match('big_prefix_text')
             if (prefix):
                 subsequent_tot += prefix
             else :
-                subsequent_tot = self.maybe_match('numeral_text', 'numeral_num')
+                subsequent_tot = self.maybe_match(numeral_text, numeral_num)
                 if (subsequent_tot is None):
                     break
                 prefix = self.maybe_match('big_prefix_text')
@@ -137,6 +144,13 @@ class NumberParser(ParserBase):
                 
             total += subsequent_tot
         return total
+    
+    def numeral(self):
+        return self.__numeral(False)
+    
+    def undecorated_numeral(self):
+         return self.__numeral(True)
+    
     
     # BIG_PREFIX_TEXT = big_prefixes -> billion -> 1,000,000,000
     def big_prefix_text(self):
@@ -148,12 +162,18 @@ class NumberParser(ParserBase):
     # NUMERAL_TXT = dir_single_nums -> one -> 1
     # NUMERAL_TXT = ten_prefs + (-)* + single_nums -> tewenty one -> 21
     # NUMERAL_TXT = ten_prefs -> twenty -> 20
+    
     def numeral_text(self):
+        return self.__numeral_text(True)
+    def numeral_text_nd(self):
+        return self.__numeral_text(False)
+    def __numeral_text(self, decoration=True):
 
         # match the longer possible keywords first
         rv = self.maybe_keyword(*self.ten_pref_keys)
         if (rv):
-            self.maybe_char('-')
+            if decoration:
+                self.maybe_char('-')
             ten_num = dtConst.TEN_PREFIXES[rv]
             rv = self.maybe_keyword(*self.single_num_keys)
             if (rv):
@@ -164,7 +184,8 @@ class NumberParser(ParserBase):
         
         rv = self.keyword(*self.single_num_keys)
         if (rv):
-            self.maybe_char('-')
+            if decoration:
+                self.maybe_char('-')
             single_num = dtConst.SINGLE_NUMS[rv]
             
             rv = self.maybe_keyword(*self.ten_pref_keys)
@@ -181,11 +202,18 @@ class NumberParser(ParserBase):
         
         
     def numeral_num(self):
+        return self.__numeral_num(True)
+
+    def numeral_num_nd(self):
+        return self.__numeral_num(False)
+    
+    def __numeral_num(self, decoration=True):
         chars = []
         chars.append(self.char('0-9'))
 
         while True:
-            comma = self.maybe_char(',')
+            if decoration:
+                comma = self.maybe_char(',')
             char = self.maybe_char('0-9')
             if char is None:
                 break
@@ -194,6 +222,7 @@ class NumberParser(ParserBase):
 
         rv = int(''.join(chars))
         return rv
+    
 
 if __name__ == '__main__':
     parser = NumberParser()

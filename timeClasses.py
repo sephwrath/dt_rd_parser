@@ -1,5 +1,6 @@
 import datetime
 import calendar
+import math
 from enum import Enum
 import constants as dtc
 
@@ -12,32 +13,50 @@ class PeriodType (Enum):
     SECOND = 5
     MILLISECOND = 6
 
+class OffsetType (Enum):
+    START = 0
+    END = 1
+    BOTH = 2
+
 class PeriodDetail:
-    def __init__(self, periodType, base, multiplier, hasPart, min, max ):
+    def __init__(self, periodName, periodType, multiplier, hasPart, min, max ):
+        self.periodName = periodName
         self.periodType = periodType
-        self.base = base
         self.multiplier = multiplier
-        self.next = next
         self.hasPart = hasPart
         self.min = min
         self.max = max
 
-periodDetails = {
-    "milleneum": PeriodDetail("milleneum", PeriodType.YEAR, 1000, "century", 1, 1000),
-    "century": PeriodDetail("century", PeriodType.YEAR, 100, "decade", 1, 100),
-    "decade": PeriodDetail("decade", PeriodType.YEAR, 10, "year", 1, 10),
-    "year": PeriodDetail("year", PeriodType.YEAR, 1, "month", 1, 12),
-    "quarter": PeriodDetail("quarter", PeriodType.MONTH, 3, "month", 1, 3),
-    "season": PeriodDetail("season", PeriodType.MONTH, 3, "month", 1, 3),
-    "month": PeriodDetail("month", PeriodType.MONTH, 1, "day", 1, 31),
-    "fortnight": PeriodDetail("fortnight", PeriodType.DAY, 14, "day", 1, 14),
-    "week": PeriodDetail("week", PeriodType.DAY, 7, "day", 1, 7),
-    "day": PeriodDetail("day", PeriodType.DAY, 1, "hour", 1, 24),
-    "morning": PeriodDetail("morning", PeriodType.HOUR, 1, "minute", 1, 60),
-    "hour": PeriodDetail("hour", PeriodType.HOUR, 1, "minute", 1, 60),
-    "minute": PeriodDetail("minute", PeriodType.MINUTE, 1, "second", 1, 60),
-    "second": PeriodDetail("second", PeriodType.SECOND, 1, "millisecond", 1, 1000)
-}
+class Period:
+    periodDetails = {
+            "milleneum": PeriodDetail("milleneum", PeriodType.YEAR, 1000, "year", 1, 1000),
+            "century": PeriodDetail("century", PeriodType.YEAR, 100, "year", 1, 100),
+            "decade": PeriodDetail("decade", PeriodType.YEAR, 10, "year", 1, 10),
+            "year": PeriodDetail("year", PeriodType.YEAR, 1, "month", 1, 12),
+            "quarter": PeriodDetail("quarter", PeriodType.MONTH, 3, "month", 1, 3),
+            "season": PeriodDetail("season", PeriodType.MONTH, 3, "month", 1, 3),
+            "month": PeriodDetail("month", PeriodType.MONTH, 1, "day", 1, 31),
+            "fortnight": PeriodDetail("fortnight", PeriodType.DAY, 14, "day", 1, 14),
+            "week": PeriodDetail("week", PeriodType.DAY, 7, "day", 1, 7),
+            "day": PeriodDetail("day", PeriodType.DAY, 1, "hour", 1, 24),
+            "morning": PeriodDetail("morning", PeriodType.HOUR, 12, "hour", 1, 12),
+            "hour": PeriodDetail("hour", PeriodType.HOUR, 1, "minute", 1, 60),
+            "minute": PeriodDetail("minute", PeriodType.MINUTE, 1, "second", 1, 60),
+            "second": PeriodDetail("second", PeriodType.SECOND, 1, "millisecond", 1, 1000)
+        }
+        
+
+    @staticmethod
+    def get(name: str):
+        return Period.periodDetails.get(name)
+    
+    @staticmethod
+    def getPortion(name: str) -> PeriodDetail:
+        pd = Period.periodDetails.get(name.lower())
+        part = Period.periodDetails.get(pd.hasPart)
+        return part
+
+
 
 
 
@@ -88,7 +107,7 @@ class TimeSpan:
         self.end =  [None, None, None, None, None, None, None]
         self.end_grain = PeriodType.YEAR
 
-        # defines wether to exclude the last second or millisecond from the end limit when returning the end of a time span
+        # defines whether to exclude the last second or millisecond from the end limit when returning the end of a time span
         # so will return 2009/12/31 23:59:59.999999 instead of 2010/1/1 0:0:0.0
         # Todo add getters to access start and end to enforce this
         self.exclude_end_limit = True
@@ -128,7 +147,7 @@ class TimeSpan:
                 # no point inferning seconds or we have inferred the whole date
         return self
     
-    def merge(self, other):
+    def merge(self, other : 'TimeSpan'):
         for (idx, per) in enumerate(other.start):
             if per is not None:
                 self.start[idx] = per
@@ -138,6 +157,9 @@ class TimeSpan:
         return self
     
     def has_gaps(self):
+        """ Checks if there are any null values in either the start or end values of the time span 
+        if a date/time has val - None - val then there is a gap None - val is fine because it can be inferred
+        and val - None can also be inferred"""
         last_null = True
         change_count = 0
         for  per in self.start:
@@ -157,11 +179,23 @@ class TimeSpan:
         return False
     
     def is_none(self):
-        for per in self.start:
+        """Checks if the time span is empty"""
+        if self.__is_none(self.start) and self.__is_none(self.end):
+            return True
+        return False
+
+    def __is_none(self, arr):
+        for per in arr:
             if per is not None:
                 return False
-        for per in self.end:
-            if per is not None:
+        return True
+    
+    def is_point(self):
+        # only start is populated or end == start we dont have a period
+        if self.__is_none(self.end) and not self.__is_none(self.start):
+            return True
+        for (idx, per) in enumerate(self.start):
+            if per != self.end[idx]:
                 return False
         return True
     
@@ -291,7 +325,7 @@ class TimeSpan:
             self.end[period.value] = end
         else:
             self.end[period.value] = self.start[period.value]
-            self.offset_period(period, 1, 'end', False)
+            #self.offset_period(period, 1, 'end')
         self.__zero_from_grain()
 
     def __zero_from_grain(self):

@@ -7,47 +7,47 @@ special_days = {
 }
 
 dt_months = {
-    'jan': 1,
     'january': 1,
-    'feb': 2,
+    'jan': 1,
     'february': 2,
-    'mar': 3,
+    'feb': 2,
     'march': 3,
-    'apr': 4,
+    'mar': 3,
     'april': 4,
+    'apr': 4,
+    'june': 6,
     'may': 5,
     'jun': 6,
-    'june': 6,
-    'jul': 7,
     'july': 7,
-    'aug': 8,
+    'jul': 7,
     'august': 8,
+    'aug': 8,
+    'september': 9,
     'sep': 9,
     'sept': 9,
-    'september': 9,
-    'oct': 10,
     'october': 10,
-    'nov': 11,
+    'oct': 10,
     'november': 11,
-    'dec': 12,
-    'december': 12
+    'nov': 11,
+    'december': 12,
+    'dec': 12
 }
 
 dt_week_days = {
-    'mon': 0,
     'monday': 0,
-    'tue': 1,
+    'mon': 0,
     'tuesday': 1,
-    'wed': 2,
+    'tue': 1,
     'wednesday': 2,
-    'thu': 3,
+    'wed': 2,
     'thursday': 3,
-    'fri': 4,
+    'thu': 3,
     'friday': 4,
-    'sat': 5,
+    'fri': 4,
     'saturday': 5,
-    'sun': 6,
-    'sunday': 6
+    'sat': 5,
+    'sunday': 6,
+    'sun': 6
 }
 
 dt_month_days = {

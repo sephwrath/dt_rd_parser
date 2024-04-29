@@ -3,6 +3,7 @@ from parseError import ParseError
 class ParserBase:
     def __init__(self):
         self.cache = {}
+        self.ignoreCase = True
 
     def parse(self, text):
         self.text = text
@@ -90,7 +91,7 @@ class ParserBase:
             low = self.pos + 1
             high = low + len(keyword)
 
-            if self.text[low:high] == keyword:
+            if self.text[low:high].lower() == keyword:
                 self.pos += len(keyword)
                 self.eat_whitespace()
                 return keyword
