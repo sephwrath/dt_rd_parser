@@ -44,6 +44,31 @@ class Period:
             "minute": PeriodDetail("minute", PeriodType.MINUTE, 1, "second", 1, 60),
             "second": PeriodDetail("second", PeriodType.SECOND, 1, "millisecond", 1, 1000)
         }
+    
+    periodTranslation = {
+        "milleneum": "millennium", "millenia": "millennium", 
+        "century": "century", "centuries": "century", 
+        "decade": "decade", "decades": "decade",
+        "year": "year", "years": "year", "yrs": "year", "yr": "year", 
+        "quarter": "quarter", "quarters": "quarter", "qtr": "quarter", "qtrs": "quarter",
+        "season": "season", "seasons": "season",
+        "month": "month", "months": "month", "mo": "month",
+        "fortnight": "fortnight", "fortnights": "fortnight", 
+        "week": "week", "weeks": "week",
+        "day": "day", "days": "day", "d": "day", "dys": "day",
+        "morning": "morning", "mornings": "morning",
+        "hour": "hour", "hours": "hour", "hr": "hour", "hrs": "hour",
+        "minute": "minute", "minutes": "minute", "min": "minute", "mins": "minute",
+        "second": "second", "seconds": "second", "sec": "second", "secs": "second",
+    }
+    
+    @staticmethod
+    def getPeriodTranslationKeys():
+        return list(Period.periodTranslation.keys())
+    
+    @staticmethod
+    def getPeriodFromKey(key):
+        return Period.periodTranslation[key]
         
 
     @staticmethod
@@ -55,12 +80,6 @@ class Period:
         pd = Period.periodDetails.get(name.lower())
         part = Period.periodDetails.get(pd.hasPart)
         return part
-
-
-
-
-
-
 
 
 class TimePeriod:
