@@ -16,7 +16,7 @@ class TimeParser(NumberParser):
         self.month_day_precidence = 'month'
         self.northern_hemisphere = True
 
-        self.start_expr = self.date_expression
+        self.start_expr = self.time_expression
 
         self.month_range = {
             'spring' : (3, 3),
@@ -31,8 +31,14 @@ class TimeParser(NumberParser):
                 self.month_range[key] = ((self.month_range[key][0]+ 6) % 12, 3)
 
     def __reset(self):
-        self.offset = dt.TimePeriod()
+        #self.offset = dt.TimePeriod()
+        # keeps track of the number of dates that have been parsed - parsing a second date updates the end of the range
+        self.date_count = 0
         self.range = dt.TimeSpan()
+        self.part_mod = False
+    
+    def set_refrence_date(self, date: dateTime.datetime):
+        self.implicit_anchor = date
 
     def set_start_expr(self, start_expr):
         self.start_expr = start_expr
@@ -44,48 +50,90 @@ class TimeParser(NumberParser):
     # TIME_EXPRESSION = EXPLICIT_RANGE | IMPLICIT_RANGE -> explicit is from xxx to yyy implicit is a single time value ie in the mid 2000's
     def time_expression(self):
         # test for times first then if we don't have an anchor point check for an offset an use the default date
-        rv = self.match('explicit_range', 'implicit_range')
+        #rv = self.match('explicit_range', 'implicit_range')
+        range_start = ['the', 'around', 'from', 'between', 'beginning', 'starting', 'begin', 'start', 'started', 'commencing', 'initialted']
+        range_separator = ['and', 'to', 'through', 'thru', '-', 'ending', 'ended', 'end', ':', 'until']
+        implicit_now = ['ago', 'in history', 'from now', 'prior']
+        start_offset = self.maybe_match('period_offset_expression')
+        implicit_match = self.maybe_keyword(*implicit_now)
+
+        self.maybe_keyword(*range_start)
+
+        offset_start = self.maybe_match('period')
+        rv_start = self.match('date_expression')
+
+        if (offset_start):
+            self.modify_range_by_offset(offset_start[1], offset_start[0])
         
-        return rv
+        range_kwd = self.maybe_keyword(*range_separator)
+
+        if range_kwd is not None:
+            offset_end = self.maybe_match('period_offset_expression')
+            rv_end = self.match('date_expression')
+            if (offset_end):
+                self.modify_range_by_offset(offset_end[1], offset_end[0])
+
+        if (self.part_mod == False):
+            self.range.offset_period(self.range.grain, 1, 'end')
+
+        return self.range
+
     
     # IMPLICIT_RANGE = (PERIOD_OFFSET_EXPRESSION)* + DATE_EXPRESSION + (PERIOD_OFFSET_EXPRESSION)* | (PERIOD_OFFSET_EXPRESSION)* + implicit_now 
     def implicit_range(self):
         implicit_now = ['ago', 'in history', 'from now', 'prior']
         start_offset = self.maybe_match('period_offset_expression')
-        implicit_match = self.maybe_match(*implicit_now)
+        implicit_match = self.maybe_keyword(*implicit_now)
 
         if implicit_match is not None:
             rv = self.match('date_expression', 'period_offset_expression')
         else:
             end_offset = self.match('period_offset_expression')
-            rv = self.match('date_expression', 'period_offset_expression')
+            rv = self.match('date_expression')
 
         return rv
     
     # EXPLICIT_RANGE = range_start + IMPLICIT_RANGE + range_separator  + IMPLICIT_RANGE
     def explicit_range(self):
-        range_start = ['the', 'around', 'from', 'between', 'beginning', 'starting', 'begin', 'start', 'started', 'commencing', 'initialted']
-        range_separator = ['and', 'to', 'through', 'thru', '-', 'ending', 'ended', 'end', ':', 'until']
-
-        self.maybe_match(*range_start)
-        rv_start = self.match('date_expression')
-        self.match(*range_separator)
-        rv_end = self.match('date_expression')
+        pass
 
     def period_modifier(self):
         prefix = ['first part of', 'last part of', 'middle of', 'start of']
 
     # PERIOD_OFFSET_EXPRESSION = IMPLICIT_ANCHOR_OFFSET | (LEAD_MODIFIER)? + PERIOD + (TRAIL_MODIFIER)?
-    def period_offset_expression(self):
+    def period_offset_expression(self) -> tuple[bool, list[tuple[dt.PeriodDetail, float]]]:
         implicit_relative = ['yesterday', 'today', 'tomorrow']
         implicit_offset = ['next', 'last']
-        rv = self.match('period', 'lead_modifier')
 
-        return rv
+        prev_mod_part = ['leading up', 'old', 'previous', 'prior', 'ago', 'before','earlier', 'previously','foregoing','andtecedent', 'advance', 'preceding']
+        next_mod_part = ['leading on', 'following', 'after', 'new', 'subsequent', 'succeeding', 'later', 'subsequent', 'after', 'ensuing', 'afterwards', 'thereafter']
+
+        period = self.match('period')
+        prev_kwd = self.maybe_keyword(*prev_mod_part)
+        is_forward = None
+        if prev_kwd is not None:
+            is_forward = False
+        else:
+            next_kwd = self.maybe_keyword(*next_mod_part)
+            if next_kwd is not None:
+                is_forward = True
+
+        if is_forward is None:
+            raise ParseError(self.pos + 1, 'No period_offset_expression found.', self.text[self.pos])
+
+        return (is_forward, period)
+    
+    def modify_range_by_offset(self, period : list[tuple[dt.PeriodDetail, float]], is_forward: bool):
+        ''' modify the range by the period'''
+        end_mod = 'start' if self.date_count == 0 else 'end'
+        mult = 1 if is_forward else -1
+
+        for period_part in period:
+            self.range.offset_period(period_part[0].periodType, period_part[1]*mult, end_mod)
     
     # PERIOD = (PERIOD_PART) * | target_period (monday, june, summer etc)
     # possibly don't need target as that should be covered by the date expressions
-    def period(self) -> list[tuple[str, float]]:
+    def period(self) -> list[tuple[dt.PeriodDetail, float]]:
         periodArr = []
         while(True):
             periodPt = self.maybe_match('period_part')
@@ -95,17 +143,17 @@ class TimeParser(NumberParser):
                 periodArr.append(periodPt)
 
         if len(periodArr) == 0:
-            raise ParseError(self.pos, 'No period found.', self.text[self.pos])
+            raise ParseError(self.pos + 1, 'No period found.', self.text[self.pos])
 
         return periodArr
     
     # PERIOD_PART = (NUMERAL | FRACTION | DECIMAL) (period)
     # we want to match a whole period - not just a number raise if we don't get both parts
-    def period_part(self) -> tuple[str, float]:
-        numeric_val = self.match('numeral', 'fraction', 'decimal')
+    def period_part(self) -> tuple['dt.PeriodDetail', float]:
+        numeric_val = self.match('numeral', 'fraction')
         op = self.keyword(*dt.Period.getPeriodTranslationKeys())
         if (not op or not numeric_val):
-            raise ParseError(self.pos, 'No period found.', self.text[self.pos])
+            raise ParseError(self.pos + 1, 'No period found.', self.text[self.pos])
         return (dt.Period.getPeriodFromKey(op), numeric_val)
 
     
@@ -116,11 +164,10 @@ class TimeParser(NumberParser):
     # missing the last lest significant parts will mean the range will be inferred ie 1970 will be inferred to be 1970-01-01 to 1970-12-31
     def date_expression(self):
         getPd = lambda pd : dt.Period.get(pd) if pd is not None and pd in dt.Period.periodDetails else None
-        date_sep = ['/', '-', ',']
-        if self.month_day_precidence == 'month':
-            parsed_items = ['year', 'month', 'day', 'time']
-        else:
-            parsed_items = ['year', 'day', 'month', 'time']
+        
+        parsed_items = ['year', 'day_month', 'time']
+
+        parse_length = len(parsed_items)
 
         part_mod = None
         while(len(parsed_items) > 0):
@@ -130,30 +177,53 @@ class TimeParser(NumberParser):
             if date_val == None:
                 break
             elif date_val[0] == 'year':
-                # set the start and end dates to be the same then mod end date with the offset period
-                self.range.set_yrs(date_val[1], date_val[1])
-                pd = getPd(date_val[2])
-                if pd is not None and pd.periodName != 'year':
-                    self.range.offset_period(pd.periodType, pd.multiplier, 'end')
-            elif date_val[0] == 'month':
-                self.range.set_mos(date_val[1][0])
-                if (date_val[1][1] > 1):
-                    self.range.offset_period(dt.PeriodType.MONTH, date_val[1][1], 'end')
-            elif date_val[0] == 'day':
-                self.range.set_days(date_val[1])
+                if self.date_count == 0:
+                    # set the start and end dates to be the same then mod end date with the offset period
+                    self.range.set_yrs(date_val[1], date_val[1])
+                    pd = getPd(date_val[2])
+                    if pd is not None and pd.periodName != 'year':
+                        self.range.offset_period(pd.periodType, pd.multiplier, 'end')
+                else:
+                    self.range.set_edge_pt('end', dt.PeriodType.YEAR, date_val[1])
+            elif date_val[0] == 'day_month':
+                if date_val[1] != None:
+                    month_val = date_val[1]
+                    if self.date_count == 0:
+                        self.range.set_mos(month_val[1][0])
+                        if (month_val[1][1] > 1):
+                            self.range.offset_period(dt.PeriodType.MONTH, month_val[1][1], 'end')
+                    else:
+                        self.range.set_edge_pt('end', dt.PeriodType.MONTH, month_val[1][0])
+                        
+                if date_val[2] != None:
+                    day_val = date_val[2]
+                    
+                    if self.date_count == 0:
+                        self.range.set_days(day_val[1])
+                    else:
+                        self.range.set_edge_pt('end', dt.PeriodType.DAY, day_val[1])
+
             elif date_val[0].value == 'time':
-                self.range.merge(date_val[1])
+                if self.date_count == 0:
+                    self.range.merge(date_val[1])
+                else:
+                    self.range.merge(date_val[1], dt.EdgeType.END)
             else:
                 break
 
-            self.maybe_keyword(*date_sep)
-
-            # TODO -  test if day and month need to swap
             parsed_items.remove(date_val[0])
+
+        # no dates were parsed
+        if len(parsed_items) == parse_length:
+            raise ParseError(self.pos + 1, 'No date_expression found.', self.text[self.pos])
+        else:
+            if (self.date_count == 0):
+                self.range.infer(self.implicit_anchor)
+            self.date_count += 1
         
         # check that there are no breaks between ranges
         if self.range.has_gaps():
-            self.range = dt.TimeSpan()
+            raise ParseError(self.pos + 1, 'Gaps in parsed datetime.', self.text[self.pos])
        
         # try and get as many of these matches as possible in order the highest you start with has to be followed by the next lowest
         # the first missing bit gives the range and the starting point is backfilled with the implicit anchor time
@@ -161,7 +231,7 @@ class TimeParser(NumberParser):
                 
         # change the period based on the part modifier 
         if part_mod != None:
-
+            self.part_mod = True
             part = dt.Period.get(self.range.grain.name.lower())
             partType = dt.Period.get(part.hasPart).periodType
             part_portion = math.floor(part_mod[1] * part.max)
@@ -181,8 +251,7 @@ class TimeParser(NumberParser):
                 self.range.offset_period(self.range.grain, 1, 'end')
                 self.range.offset_period(partType, part_portion, 'end')
                 self.range.offset_period(partType, -part_portion, 'start')
-        elif (self.range.is_point()):
-            self.range.offset_period(self.range.grain, 1, 'end')
+        
 
         # next, last - could these be part of the period offsets - 
 
@@ -209,7 +278,9 @@ class TimeParser(NumberParser):
             return ('approx', 0.25)
         
 
-
+    def date_separator(self):
+        date_sep = ['/', '-', ',']
+        self.maybe_keyword(*date_sep)
     
     # YEAR = yr_prefix + NUMERAL ie year one
     # YEAR = NUMERAL + yr_prefix ie 500 BC
@@ -235,6 +306,8 @@ class TimeParser(NumberParser):
         current_century = self.implicit_anchor.year - (self.implicit_anchor.year % 100)
 
         fn_bc_ad = lambda x: -1 if x and x[0] == 'b' else 1
+
+        self.date_separator()
 
         m_prefix = self.maybe_keyword(*yr_prefix)
         m_bc_ad = self.maybe_keyword(*bc_ad)
@@ -273,7 +346,7 @@ class TimeParser(NumberParser):
             bracket = self.keyword(')', ']', '}')
 
         if year is None:
-            raise ParseError(self.pos, 'No year found.', self.text[self.pos])
+            raise ParseError(self.pos + 1, 'No year found.', self.text[self.pos])
         
         if decade_tick:
             # '80's, '90s, '72
@@ -294,12 +367,37 @@ class TimeParser(NumberParser):
         
         return (match_name, year, 'year')
     
+    def day_month(self):
+        result = None
+        # if the day has precidence match it first
+        if self.month_day_precidence == 'month':
+            order = ['month_then_day', 'day_then_month', 'month_only']
+        else:
+            order = ['day_then_month', 'month_then_day', 'month_only']
+        result = self.match(*order)
+        return result
+
+    def month_then_day(self):
+        monthRv = self.match('month')
+        dayRv = self.match('day')
+        return ('day_month', monthRv, dayRv)
+    
+    def day_then_month(self):
+        dayRv = self.match('day')
+        monthRv = self.match('month')
+        return ('day_month', monthRv, dayRv)
+    
+    def month_only(self):
+        monthRv = self.match('month')
+        return ('day_month', monthRv, None)
+    
     
     # MONTH = month_str | month_num | month_range
     def month(self):
         match_name = 'month'
         # returns a tuple of start month and the number of months in the range
         rv = None
+        self.date_separator()
         
         months = dtConst.dt_months.keys()
         strPeriod = self.maybe_keyword(*self.month_range.keys())
@@ -323,17 +421,23 @@ class TimeParser(NumberParser):
     
     def day(self):
         match_name = 'day'
+
+        self.date_separator()
+
         day_names = dtConst.dt_week_days.keys()
         dayName = self.maybe_keyword(*day_names)
 
         dayNum = self.match('ordinal', 'undecorated_numeral')
         self.test_range(dayNum, 1, 31)
+
         return (match_name,  dayNum)
 
     def time(self):
         match_name = 'time'
         ret_time = dt.TimeSpan()
         time_am_pm = ['am', 'pm', 'a.m.', 'p.m.', 'a.m', 'p.m']
+
+        self.date_separator()
 
         time_words = self.maybe_keyword(*dtConst.times_of_day.keys())
         
@@ -387,7 +491,7 @@ class TimeParser(NumberParser):
             ret_time.set_mins(tod[1], tod[3])
 
         if (ret_time.is_none()):
-            raise ParseError(self.pos, 'No time found.', self.text[self.pos])
+            raise ParseError(self.pos + 1, 'No time found.', self.text[self.pos])
 
         return (match_name, ret_time) 
 

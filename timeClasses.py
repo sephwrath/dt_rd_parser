@@ -13,7 +13,7 @@ class PeriodType (Enum):
     SECOND = 5
     MILLISECOND = 6
 
-class OffsetType (Enum):
+class EdgeType (Enum):
     START = 0
     END = 1
     BOTH = 2
@@ -80,43 +80,6 @@ class Period:
         pd = Period.periodDetails.get(name.lower())
         part = Period.periodDetails.get(pd.hasPart)
         return part
-
-
-class TimePeriod:
-    def __init__(self, years = None, months = None, days = None, hours = None, minutes = None, seconds = None, milliseconds = None):
-        # save irregular time periods separately 
-        self.years = years
-        self.months = months
-        self.days = days
-        self.hours = hours
-        self.minutes = minutes
-        self.seconds = seconds
-        self.milliseconds = milliseconds
-
-    def set_datetime(self, dt):
-        self.years = dt.year
-        self.months = dt.month
-        self.days = dt.day
-        self.hours = dt.hour
-        self.minutes = dt.minute
-        self.seconds = dt.second
-        self.milliseconds = dt.microsecond
-    
-    def add(self, number, period: PeriodType):
-        if period == PeriodType.DAY :
-            self.days += number
-        elif period == PeriodType.MONTH :
-            self.months += number
-        elif period == PeriodType.YEAR :
-            self.years += number
-        elif period == PeriodType.HOUR :
-            self.hours += number
-        elif period == PeriodType.MINUTE :
-            self.minutes += number
-        elif period == PeriodType.SECOND :
-            self.seconds += number
-        elif period == PeriodType.MILLISECOND :
-            self.milliseconds += number
         
 
 class TimeSpan:
@@ -125,6 +88,8 @@ class TimeSpan:
         self.grain = PeriodType.YEAR
         self.end =  [None, None, None, None, None, None, None]
         self.end_grain = PeriodType.YEAR
+
+        self.inferred = None
 
         # defines whether to exclude the last second or millisecond from the end limit when returning the end of a time span
         # so will return 2009/12/31 23:59:59.999999 instead of 2010/1/1 0:0:0.0
@@ -137,7 +102,7 @@ class TimeSpan:
         self.set_mins(mi)
         self.set_secs(sd)
 
-    def infer(self, date : datetime.datetime, grain=None):
+    def infer(self, date : datetime.datetime, grain:PeriodType=None):
         """
         Fill in any missing date information that is missing with a date time reference
         only populate upto the first defined time period type
@@ -149,30 +114,33 @@ class TimeSpan:
             None
         """
         for (idx, per) in enumerate(self.start):
-            if per is not None or (grain is not None and idx > grain) :
+            if per is not None or (grain is not None and idx > grain.value) :
                 # break when we have an existing date value or when we are going above the grain parameter
                 break
             else:
-                if idx == PeriodType.YEAR:
+                if idx == PeriodType.YEAR.value:
                     self.set_yrs(date.year)
-                elif idx == PeriodType.MONTH:
+                elif idx == PeriodType.MONTH.value:
                     self.set_mos(date.month)
-                elif idx == PeriodType.DAY:
+                elif idx == PeriodType.DAY.value:
                     self.set_days(date.day)
-                elif idx == PeriodType.HOUR:
+                elif idx == PeriodType.HOUR.value:
                     self.set_hours(date.hour)
-                elif idx == PeriodType.MINUTE:
+                elif idx == PeriodType.MINUTE.value:
                     self.set_mins(date.minute)
+                self.inferred = True
                 # no point inferning seconds or we have inferred the whole date
         return self
     
-    def merge(self, other : 'TimeSpan'):
-        for (idx, per) in enumerate(other.start):
-            if per is not None:
-                self.start[idx] = per
-        for (idx, per) in enumerate(other.end):
-            if per is not None:
-                self.end[idx] = per
+    def merge(self, other : 'TimeSpan', edge: 'EdgeType'=EdgeType.BOTH):
+        if edge != EdgeType.END:
+            for (idx, per) in enumerate(other.start):
+                if per is not None:
+                    self.start[idx] = per
+        if edge != EdgeType.START:
+            for (idx, per) in enumerate(other.end):
+                if per is not None:
+                    self.end[idx] = per
         return self
     
     def has_gaps(self):
@@ -221,7 +189,7 @@ class TimeSpan:
     def __str__(self):
         return self.__print_date('start') + " - " + self.__print_date('end')
     
-    def __print_date(self, arr='start'):
+    def __print_date(self, arr:str='start'):
         dateStr = ""
         dt_obj = self.to_datetime(arr)
         return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
@@ -243,7 +211,7 @@ class TimeSpan:
     def set_end(self, yr, mo, dy, hr, mi, sd):
         return self.set_edge('end', self.grain, yr, mo, dy, hr, mi, sd)
 
-    def set_edge(self, edge='start', grain=PeriodType.SECOND, *args):
+    def set_edge(self, edge:str='start', grain=PeriodType.SECOND, *args):
         dt_edge = self.start if edge == 'start' else self.end
         for (idx, per_val) in enumerate(args):
             if (grain.value < idx):
@@ -251,8 +219,13 @@ class TimeSpan:
             dt_edge[idx] = per_val if per_val is not None else None
 
         return self
+    
+    def set_edge_pt(self, edge: str, period : PeriodType, value: float):
+        dt_edge = self.start if edge == 'start' else self.end
+        dt_edge[period.value] = value
+        return self
 
-    def to_datetime(self, edge='start'):
+    def to_datetime(self, edge:str='start'):
         
         dt_edge = self.start if edge == 'start' else self.end
 
@@ -267,7 +240,7 @@ class TimeSpan:
                                (dt_edge[5] if dt_edge[5] is not None else 0))
         return dt
     
-    def from_datetime(self, dt, grain=PeriodType.DAY):
+    def from_datetime(self, dt:datetime.datetime, grain=PeriodType.DAY):
         self.set_yrs(dt.year if grain >= PeriodType.YEAR else None)
         self.set_mos(dt.month if grain >= PeriodType.MONTH else None)
         self.set_days(dt.day if grain >= PeriodType.DAY else None)
@@ -275,13 +248,13 @@ class TimeSpan:
         self.set_mins(dt.minute if grain >= PeriodType.MINUTE else None)
         self.set_secs(dt.second if grain >= PeriodType.SECOND else None)
 
-    def offset_month(self, update_var, months):
+    def offset_month(self, update_var:list[int], months:int):
         update_var[1] = update_var[1] - 1 + months
         update_var[0] = update_var[0] + update_var[1] // 12
         update_var[1] = update_var[1] % 12 + 1
         update_var[2] = min(update_var[2], calendar.monthrange(update_var[0],update_var[1])[1])
 
-    def apply_timedelta(self,edge, delta, grain):
+    def apply_timedelta(self, edge:str, delta:int, grain:PeriodType):
         dt = self.to_datetime(edge)
         dt += delta
         self.set_edge(edge, grain, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
@@ -292,7 +265,7 @@ class TimeSpan:
         self.set_edge('end', PeriodType.SECOND, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
 
-    def offset_period(self, period, offset, edge='both'):
+    def offset_period(self, period:PeriodType, offset:int, edge:str='both'):
         delta = None
         self.grain = period
         if (period == PeriodType.YEAR):
@@ -322,7 +295,7 @@ class TimeSpan:
 
         return self
 
-    def next_wd(self, wd_str):
+    def next_wd(self, wd_str:str):
         if (wd_str in dtc.dt_week_days):
             curr_day = dtc.dt_week_days[wd_str]
             if (self.start[0] is not None and self.start[1] is not None and self.start[3] is not None):
@@ -334,7 +307,7 @@ class TimeSpan:
                 self.offset_period(PeriodType.DAY, day_off)
         return self
         
-    def set_period(self, period, start, end):
+    def set_period(self, period:PeriodType, start:int, end:int):
         if start == None:
             return
         if self.grain.value < period.value:
@@ -353,20 +326,20 @@ class TimeSpan:
             self.start[idx] = minVal
             self.end[idx] = minVal
 
-    def set_yrs(self, yrS, yrE = None):
+    def set_yrs(self, yrS:int, yrE:int = None):
        self.set_period(PeriodType.YEAR, yrS, yrE)
 
-    def set_mos(self, moS, moE = None):
+    def set_mos(self, moS:int, moE:int = None):
         self.set_period(PeriodType.MONTH, moS, moE)
 
-    def set_days(self, dayS, dayE = None):
+    def set_days(self, dayS:int, dayE:int = None):
         self.set_period(PeriodType.DAY, dayS, dayE)
 
-    def set_hours(self, hrS, hrE = None):
+    def set_hours(self, hrS:int, hrE:int = None):
         self.set_period(PeriodType.HOUR, hrS, hrE)
 
-    def set_mins(self, minS, minE = None):
+    def set_mins(self, minS:int, minE:int = None):
         self.set_period(PeriodType.MINUTE, minS, minE)
 
-    def set_secs(self, secS, secE = None):
+    def set_secs(self, secS:int, secE:int = None):
         self.set_period(PeriodType.SECOND, secS, secE)

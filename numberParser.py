@@ -25,6 +25,9 @@ class NumberParser(ParserBase):
     
     
     def any_number(self):
+        # ordinal - first 3rd etc
+        # fraction - 1/4, 1/2 half etc
+        # numberal - 1, 2, 3
         rv = self.match('ordinal', 'fraction', 'decimal', 'numeral')
 
     # NUMBER_KEYS = (and | , | - | +)
@@ -55,7 +58,7 @@ class NumberParser(ParserBase):
             return numerator / denominator
         else:
             raise ParseError(
-                        self.pos,
+                        self.pos + 1,
                         'Unable to parse fraction. Numerator: {}, Denominator: {}'.format(numerator, denominator),
                         self.text[self.pos]
                     )
@@ -86,21 +89,21 @@ class NumberParser(ParserBase):
         if low and high:
             if number < low or number > high:
                 raise ParseError(
-                        self.pos,
+                        self.pos + 1,
                         'Parsed value {} is outside of expected range of low {} and high {}.'.format(number, low, high),
                         self.text[self.pos]
                     )
         elif low:
             if number < low:
                 raise ParseError(
-                        self.pos,
+                        self.pos + 1,
                         'Parsed value {} is less than expected minimum of {}.'.format(number, low),
                         self.text[self.pos]
                     )
         elif high:
             if number > high:
                 raise ParseError(
-                        self.pos,
+                        self.pos + 1,
                         'Parsed value {} is greater than expected maximum of {}.'.format(number, high),
                         self.text[self.pos]
                     )
@@ -114,6 +117,7 @@ class NumberParser(ParserBase):
             numeral_num = "numeral_num"
             numeral_text = "numeral_text"
 
+        is_text = False
         
         total = 0
         start_a = self.maybe_keyword('a')
@@ -122,12 +126,15 @@ class NumberParser(ParserBase):
             if (prefix):
                 total += prefix
         else :
-            total = self.match(numeral_text, numeral_num)
+            total = self.maybe_match(numeral_num)
+            if (total is None):
+                total = self.match(numeral_text)
+                is_text = True
             prefix = self.maybe_match('big_prefix_text')
             if (prefix):
                 total = prefix * total
 
-        while(True):
+        while(True and is_text):
             kw = self.maybe_keyword('and')
             
             subsequent_tot = 0
