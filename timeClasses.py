@@ -240,6 +240,14 @@ class TimeSpan:
                                (dt_edge[5] if dt_edge[5] is not None else 0))
         return dt
     
+    def to_timestamp(self, edge:str='start'):
+        ts = self.to_datetime(edge)
+        ts = ts.replace(tzinfo=datetime.timezone.utc)
+        return ts.timestamp()
+    
+    def from_timestamp(self, ts:float, grain=PeriodType.DAY):
+        self.from_datetime(datetime.datetime.fromtimestamp(ts), grain)
+    
     def from_datetime(self, dt:datetime.datetime, grain=PeriodType.DAY):
         self.set_yrs(dt.year if grain >= PeriodType.YEAR else None)
         self.set_mos(dt.month if grain >= PeriodType.MONTH else None)

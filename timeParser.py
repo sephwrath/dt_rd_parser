@@ -203,7 +203,7 @@ class TimeParser(NumberParser):
                     else:
                         self.range.set_edge_pt('end', dt.PeriodType.DAY, day_val[1])
 
-            elif date_val[0].value == 'time':
+            elif date_val[0] == 'time':
                 if self.date_count == 0:
                     self.range.merge(date_val[1])
                 else:
