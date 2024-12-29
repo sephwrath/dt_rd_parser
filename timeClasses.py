@@ -171,7 +171,7 @@ class TimeSpan:
             return True
         return False
 
-    def __is_none(self, arr):
+    def __is_none(self, arr:list):
         for per in arr:
             if per is not None:
                 return False
@@ -194,7 +194,7 @@ class TimeSpan:
         dt_obj = self.to_datetime(arr)
         return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
     
-    def __eq__(self, __value: object) -> bool:
+    def __eq__(self, __value: 'TimeSpan') -> bool:
         if self.grain != __value.grain:
             return False
         for (idx, per) in enumerate(self.start):
@@ -205,7 +205,7 @@ class TimeSpan:
                 return False
         return True
 
-    def __ne__(self, __value: object) -> bool:
+    def __ne__(self, __value: 'TimeSpan') -> bool:
         return not self.__eq__(__value)
     
     def set_end(self, yr, mo, dy, hr, mi, sd):
@@ -249,12 +249,12 @@ class TimeSpan:
         self.from_datetime(datetime.datetime.fromtimestamp(ts), grain)
     
     def from_datetime(self, dt:datetime.datetime, grain=PeriodType.DAY):
-        self.set_yrs(dt.year if grain >= PeriodType.YEAR else None)
-        self.set_mos(dt.month if grain >= PeriodType.MONTH else None)
-        self.set_days(dt.day if grain >= PeriodType.DAY else None)
-        self.set_hours(dt.hour if grain >= PeriodType.HOUR else None)
-        self.set_mins(dt.minute if grain >= PeriodType.MINUTE else None)
-        self.set_secs(dt.second if grain >= PeriodType.SECOND else None)
+        self.set_yrs(dt.year if grain.value >= PeriodType.YEAR.value else None)
+        self.set_mos(dt.month if grain.value >= PeriodType.MONTH.value else None)
+        self.set_days(dt.day if grain.value >= PeriodType.DAY.value else None)
+        self.set_hours(dt.hour if grain.value >= PeriodType.HOUR.value else None)
+        self.set_mins(dt.minute if grain.value >= PeriodType.MINUTE.value else None)
+        self.set_secs(dt.second if grain.value >= PeriodType.SECOND.value else None)
 
     def offset_month(self, update_var:list[int], months:int):
         update_var[1] = update_var[1] - 1 + months

@@ -13,6 +13,7 @@ class TimeParser(NumberParser):
         super().__init__()
         # if parts of a date are missing this is the default date that is used to infer the values - ie "next tuesday" will use this date as the anchor
         self.implicit_anchor = dateTime.datetime.now()
+        self.implicit_grain = dt.PeriodType.SECOND
         self.month_day_precidence = 'month'
         self.northern_hemisphere = True
 
@@ -37,7 +38,8 @@ class TimeParser(NumberParser):
         self.range = dt.TimeSpan()
         self.part_mod = False
     
-    def set_refrence_date(self, date: dateTime.datetime):
+    def set_refrence_date(self, date: dateTime.datetime, grain:dt.PeriodType=dt.PeriodType.SECOND):
+        self.implicit_grain = grain
         self.implicit_anchor = date
 
     def set_start_expr(self, start_expr):
@@ -53,14 +55,17 @@ class TimeParser(NumberParser):
         #rv = self.match('explicit_range', 'implicit_range')
         range_start = ['the', 'around', 'from', 'between', 'beginning', 'starting', 'begin', 'start', 'started', 'commencing', 'initialted']
         range_separator = ['and', 'to', 'through', 'thru', '-', 'ending', 'ended', 'end', ':', 'until']
-        implicit_now = ['ago', 'in history', 'from now', 'prior']
-        start_offset = self.maybe_match('period_offset_expression')
-        implicit_match = self.maybe_keyword(*implicit_now)
+        #implicit_now = ['ago', 'in history', 'from now', 'prior']
+        #implicit_match = self.maybe_keyword(*implicit_now)
 
         self.maybe_keyword(*range_start)
 
-        offset_start = self.maybe_match('period')
-        rv_start = self.match('date_expression')
+        offset_start = self.maybe_match('period_offset_expression')
+        rv_start = self.maybe_match('date_expression')
+
+        # if we don't have a date use an implicit date
+        if (rv_start is None):
+            rv_start = self.range.from_datetime(self.implicit_anchor, self.implicit_grain)
 
         if (offset_start):
             self.modify_range_by_offset(offset_start[1], offset_start[0])
@@ -97,39 +102,73 @@ class TimeParser(NumberParser):
     def explicit_range(self):
         pass
 
-    def period_modifier(self):
-        prefix = ['first part of', 'last part of', 'middle of', 'start of']
+
 
     # PERIOD_OFFSET_EXPRESSION = IMPLICIT_ANCHOR_OFFSET | (LEAD_MODIFIER)? + PERIOD + (TRAIL_MODIFIER)?
+    # PART_MODIFIER = ("the")* + (start | end | middle | approx)
+    # DIR_MODIFIER = (forward | backward | same)
+    
     def period_offset_expression(self) -> tuple[bool, list[tuple[dt.PeriodDetail, float]]]:
         implicit_relative = ['yesterday', 'today', 'tomorrow']
-        implicit_offset = ['next', 'last']
+
+        implicit_offset_forward = ['next', 'following', 'after']
+        implicit_offset_backward = ['previous', 'last']
+        implicit_offset_same = ['this', 'current', 'same']
+
+        ignore = self.maybe_keyword('that', 'the')
+        direction  = None
+
+        part_mod = self.maybe_match('part_modifier')
+        if (part_mod is not None):
+            ignore = self.keyword(*part_join_words)
+
+
+        lead_mod = self.maybe_keyword(*implicit_offset_forward)
+        if lead_mod is not None:
+            direction = 1
+        else:
+            lead_mod = self.maybe_keyword(*implicit_offset_backward)
+            if lead_mod is not None:
+                direction = -1
+            else:
+                lead_mod = self.maybe_keyword(*implicit_offset_same)
+                if lead_mod is not None:
+                    direction = 0
 
         prev_mod_part = ['leading up', 'old', 'previous', 'prior', 'ago', 'before','earlier', 'previously','foregoing','andtecedent', 'advance', 'preceding']
         next_mod_part = ['leading on', 'following', 'after', 'new', 'subsequent', 'succeeding', 'later', 'subsequent', 'after', 'ensuing', 'afterwards', 'thereafter']
 
         period = self.match('period')
         prev_kwd = self.maybe_keyword(*prev_mod_part)
-        is_forward = None
+
         if prev_kwd is not None:
-            is_forward = False
+            direction = False
         else:
             next_kwd = self.maybe_keyword(*next_mod_part)
             if next_kwd is not None:
-                is_forward = True
+                direction = True
 
-        if is_forward is None:
+        if direction is None:
             raise ParseError(self.pos + 1, 'No period_offset_expression found.', self.text[self.pos])
 
-        return (is_forward, period)
+        return (direction, period)
     
-    def modify_range_by_offset(self, period : list[tuple[dt.PeriodDetail, float]], is_forward: bool):
+    def modify_range_by_offset(self, period : list[tuple[dt.PeriodDetail, float]], direction: int):
         ''' modify the range by the period'''
-        end_mod = 'start' if self.date_count == 0 else 'end'
-        mult = 1 if is_forward else -1
+        if self.date_count == 0:
+            if direction > 0:
+                end_mod = 'both'
+            else:
+                end_mod = 'start'
+        else:
+            if direction < 0:
+                end_mod = 'both'
+            else:
+                end_mod = 'end' 
 
         for period_part in period:
-            self.range.offset_period(period_part[0].periodType, period_part[1]*mult, end_mod)
+            periodType = dt.Period.get(period_part[0]).periodType
+            self.range.offset_period(periodType, period_part[1]*direction, end_mod)
     
     # PERIOD = (PERIOD_PART) * | target_period (monday, june, summer etc)
     # possibly don't need target as that should be covered by the date expressions
@@ -150,7 +189,10 @@ class TimeParser(NumberParser):
     # PERIOD_PART = (NUMERAL | FRACTION | DECIMAL) (period)
     # we want to match a whole period - not just a number raise if we don't get both parts
     def period_part(self) -> tuple['dt.PeriodDetail', float]:
-        numeric_val = self.match('numeral', 'fraction')
+        numeric_val = self.maybe_match('numeral', 'fraction')
+        if (numeric_val is None):
+            numeric_val = 1
+
         op = self.keyword(*dt.Period.getPeriodTranslationKeys())
         if (not op or not numeric_val):
             raise ParseError(self.pos + 1, 'No period found.', self.text[self.pos])
@@ -229,6 +271,14 @@ class TimeParser(NumberParser):
         # the first missing bit gives the range and the starting point is backfilled with the implicit anchor time
         # ie Jan will give the range of the month on jan in the implicit anchor time year
                 
+        
+        self.apply_part_modifier(part_mod, 1)
+
+        # next, last - could these be part of the period offsets - 
+
+        return self.range
+    
+    def apply_part_modifier(self, part_mod : tuple[str, float]):
         # change the period based on the part modifier 
         if part_mod != None:
             self.part_mod = True
@@ -251,11 +301,6 @@ class TimeParser(NumberParser):
                 self.range.offset_period(self.range.grain, 1, 'end')
                 self.range.offset_period(partType, part_portion, 'end')
                 self.range.offset_period(partType, -part_portion, 'start')
-        
-
-        # next, last - could these be part of the period offsets - 
-
-        return self.range
     
     def part_modifier(self) -> tuple[str, float]:
         start_mod = ['preliminary', 'start', 'initial', 'first part', 'beginning', 'opening', 'early', 'dawn', 'first']
@@ -264,6 +309,7 @@ class TimeParser(NumberParser):
         approx_mod = ['around', 'circa', 'c.a.', 'ca', 'about', 'near', 'approximately', 'soon']
 
         # TODO - add fractional components ie first third of the year, closing quarter of the month
+        ignore_start = self.maybe_keyword('at the', 'the')
         start_kw = self.maybe_keyword(*start_mod)
         if (start_kw):
             return ('start', 0.25)
@@ -276,6 +322,7 @@ class TimeParser(NumberParser):
         approx_kw = self.maybe_keyword(*approx_mod)
         if (approx_kw):
             return ('approx', 0.25)
+        ignore_end = self.maybe_keyword('of', 'in')
         
 
     def date_separator(self):
