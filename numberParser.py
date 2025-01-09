@@ -1,6 +1,7 @@
-from parserBase import ParserBase
-from parseError import ParseError
-import constants as dtConst
+import os, sys
+from .parserBase import ParserBase
+from .parseError import ParseError
+from . import constants as dtConst
 
 class NumberParser(ParserBase):
     def __init__(self):

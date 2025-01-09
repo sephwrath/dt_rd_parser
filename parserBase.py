@@ -1,4 +1,4 @@
-from parseError import ParseError
+from .parseError import ParseError
 
 class ParserBase:
     def __init__(self):

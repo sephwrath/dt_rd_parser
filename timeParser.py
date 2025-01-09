@@ -1,10 +1,10 @@
 import math
-from parserBase import ParserBase
-from numberParser import NumberParser
-from parseError import ParseError
-import timeClasses as dt
 import datetime as dateTime
-import constants as dtConst
+from .parserBase import ParserBase
+from .numberParser import NumberParser
+from .parseError import ParseError
+from . import timeClasses as dt
+from . import constants as dtConst
 
 # part of the theory behind this parser is that you are always specifiying a range when describing a date or time for example "29th July 2001" isn't a point in time
 # it's the range of values from the start of the day to the end of the day and even if you specified it down to seconds you are specifying from the start of the second to the end
